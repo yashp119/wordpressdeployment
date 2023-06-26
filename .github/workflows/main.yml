@@ -10,51 +10,26 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v2
 
-      - name: Set up PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.0'
+      - name: Install WordPress
+        run: sudo apt-get update && sudo apt-get install -y wordpress
 
-      - name: Set up MySQL
+      - name: Copy WordPress files
         run: |
-          sudo apt-get update
-          sudo apt-get install -y mysql-server
-          sudo mysql -e "CREATE DATABASE wordpress;"
-          sudo mysql -e "GRANT ALL PRIVILEGES ON wordpress.* TO 'wordpress'@'localhost' IDENTIFIED BY 'redhat';"
-          sudo mysql -e "FLUSH PRIVILEGES;"
+          cd wordpress
+          sudo cp -r * /var/www/html
 
-      - name: Download and extract WordPress
-        run: |
-          wget -P /tmp https://wordpress.org/latest.tar.gz
-          sudo tar -xzvf /tmp/latest.tar.gz -C /var/www/html/
-          sudo chown -R www-data:www-data /var/www/html/wordpress
-          sudo chmod -R 755 /var/www/html/wordpress
+      - name: Configure WordPress
+        run: sudo wp-config.php
 
-      - name: Set up wp-config.php
-        run: |
-          cd /var/www/html/wordpress
-          cp wp-config-sample.php wp-config.php
-          sed -i "s/database_name_here/wordpress/" wp-config.php
-          sed -i "s/username_here/wordpress/" wp-config.php
-          sed -i "s/password_here/password/" wp-config.php
-
-      - name: Configure Apache
+      - name: Start WordPress
         run: sudo service apache2 start
 
-      - name: Update Apache configuration
-        run: |
-          sudo sed -i "s/\/var\/www\/html/\/var\/www\/html\/wordpress/" /etc/apache2/sites-available/000-default.conf
-          sudo service apache2 restart
+      - name: Get EC2 instance public IP
+        run: curl http://15.206.167.125/latest/meta-data/public-ipv4
+        id: ip
 
-      - name: Deploy to EC2 instance
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_PRIVATE_KEY }}
-          script: |
-            cd /var/www/html/wordpress
-            git pull origin master
+      - name: Access WordPress
+        run: curl http://${{ steps.ip.outputs.stdout }}/wordpress
